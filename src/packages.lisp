@@ -1,2 +1,2 @@
-(defpackage :cl-yassg
-  (:use :cl))
+(defpackage #:cl-yassg
+  (:use #:cl #:uiop/filesystem #:cl-markdown #:html-template))
