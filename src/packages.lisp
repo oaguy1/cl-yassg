@@ -1,4 +1,4 @@
 (defpackage #:cl-yassg
-  (:use #:cl #:uiop/filesystem #:cl-markdown #:str)
+  (:use #:cl #:uiop/filesystem #:3bmd #:str)
   (:shadow :html)
-  (:export :register-template :make-site))
+  (:export :register-template :exclude-file :make-site))

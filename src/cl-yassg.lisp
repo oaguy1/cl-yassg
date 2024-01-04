@@ -1,11 +1,15 @@
 (in-package #:cl-yassg)
 
-(defvar *excluded-dirs* '("assets" "templates"))
+(defvar *excluded-dirs* '("assets" "templates" ".git"))
+(defvar *excluded-files* '())
 
 (defvar *templates* '())
 
 (defun register-template (key func)
   (setf *templates* (acons key func *templates*)))
+
+(defun exclude-file (filename)
+  (push filename *excluded-files*))
 
 (defclass page-node ()
   ((path
@@ -47,7 +51,7 @@
 	      (t (setf body (concatenate 'string body line))))))
     (setf vars (acons "body" body vars))
     (setf body-html (with-output-to-string (stream)
-		      (cl-markdown:markdown body :stream stream)))
+		      (parse-string-and-print-to-stream body stream)))
     (setf vars (acons "body-html" body-html vars))
     vars))
 
@@ -83,6 +87,8 @@
 	(let* ((filename (file-namestring (node-path node)))
 	       (new-filename (concatenate 'string (subseq filename 0 (- (length filename) 3)) ".html"))
 	       (template-name (cdr (assoc "template" (node-variables node) :test #'equal))))
+	  (when (null template-name)
+	    (error "Unkown template. Dumping vars ~A" (node-variables node)))
 	  (with-open-file (stream (merge-pathnames new-filename curr-dir)
 	  		 :direction :output
 	  		 :if-exists :supersede
@@ -110,7 +116,8 @@
 		    (and (string= "drafts" dirname) (not include-drafts)))
 	  (setf (node-children node) (append (node-children node) (list (make-site-tree dir)))))))
     (dolist (file files)
-      (if (string= (pathname-type file) "md")
+      (if (and (not (member (file-namestring file) *excluded-files* :test #'equal))
+	       (string= (pathname-type file) "md"))
 	  (setf (node-children node)
 		(append (node-children node) (list (make-instance 'page-node :path file :is-file t))))))
     node))
