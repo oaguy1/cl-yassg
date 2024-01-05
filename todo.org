@@ -1,5 +1,5 @@
 * Tasks
-** TODO Handle handing nested variables to sibling nodes (e.g. posts to index node)
+** DONE Handle handing nested variables to parent sibling nodes (e.g. posts to index node)
 ** TODO Handle drafts
 ** TODO Handle assets
 ** TODO Handle auto-creating indexes (e.g. post lists)
