@@ -1,7 +1,7 @@
 (in-package #:cl-yassg)
 
 ;; globals
-(defvar *excluded-dirs* '("assets" "templates" ".git"))
+(defvar *excluded-dirs* '("templates" ".git"))
 (defvar *excluded-files* '())
 (defvar *templates* '())
 
@@ -16,26 +16,31 @@
 (defclass page-node ()
   ((path
     :initarg :path
+    :initform nil
     :accessor node-path)
-   (is-file-p
-    :initarg :is-file
-    :accessor node-is-file-p)
    (children
-    :initform '()
+    :initform nil
     :accessor node-children)
    (variables
-    :initform '()
+    :initform nil
     :accessor node-variables)))
 
-(defmethod node-path-name ((node page-node))
+(defclass dir-node (page-node) ())
+
+(defclass file-node (page-node) ())
+
+(defclass static-file-node (page-node) ())
+
+(defmethod node-path-name ((node dir-node))
   "give the directory name of the current node"
   (first (last (pathname-directory (node-path node)))))
 
 (defmethod parse-node-variables ((node page-node) curr-path)
-  "parse a source file into variables, parse markdown into html and store as variable"
-  (unless (node-is-file-p node)
-    (return-from parse-node-variables '()))
+  "simple nodes don't have variables, return empty list"
+  '())
 
+(defmethod parse-node-variables ((node file-node) curr-path)
+  "parse a source file into variables, parse markdown into html and store as variable"
   (let ((parsing-metadata nil)
 	(parsed-metadata nil)
 	(body "")
@@ -58,7 +63,7 @@
     (setf body-html (with-output-to-string (stream)                                    ;; convert to html
 		      (let ((3bmd-code-blocks:*code-blocks* t)
 			    (3bmd-code-blocks:*renderer* :pygments))
-			(parse-string-and-print-to-stream body stream))))
+			(3bmd:parse-string-and-print-to-stream body stream))))
     (setf vars (acons "body-html" body-html vars))
 
     (let* ((filename (file-namestring (node-path node)))
@@ -76,32 +81,34 @@
 
     ;; iterate through children, appending variables to the approproate let form
     (dolist (child (node-children node))
-      (if (node-is-file-p child)
-	  (let ((key (file-namestring (node-path child))))
-	    (setf file-child-vars (acons key (parse-tree-variables child curr-path) file-child-vars)))
-	  (let* ((key (node-path-name child))
-		 (new-path (ensure-trailing-slash (merge-pathnames key curr-path)))
-		 (child-vars (parse-tree-variables child new-path)))
-	    (setf node-vars (acons key child-vars node-vars)
-		  dir-child-vars (acons key child-vars dir-child-vars)))))
+      (cond ((typep child 'file-node)
+	     (let ((key (file-namestring (node-path child))))
+	       (setf file-child-vars (acons key (parse-tree-variables child curr-path) file-child-vars))))
+	    ((typep child 'dir-node)
+	     (let* ((key (node-path-name child))
+		    (new-path (ensure-trailing-slash (merge-pathnames key curr-path)))
+		    (child-vars (parse-tree-variables child new-path)))
+	       (setf node-vars (acons key child-vars node-vars)
+		     dir-child-vars (acons key child-vars dir-child-vars))))
+	    (t nil)))  ;; ignore static-files
 
     ;; if there are file children variables, attach them to current node
-    (unless (null file-child-vars)
+    (when file-child-vars
       (setf node-vars (append file-child-vars node-vars)))
 
     ;; if there are dir children variables, attach them to file siblings (allows for aggregate pages)
-    (unless (null dir-child-vars)
+    (when dir-child-vars
       (dolist (child (node-children node))
-	(when (node-is-file-p child)
+	(when (typep child 'file-node)
 	  (setf (node-variables child) (append (node-variables child) dir-child-vars)))))
 
     ;; set this nodes variables
-    (setf (node-variables node) (remove-if #'null node-vars))))
+    (setf (node-variables node) (remove nil node-vars))))
 
 
 (defmethod tree-to-files ((node page-node) dst-dir)
   "convert node and its children into files using the registered templates"
-  (let ((curr-dir (if (node-is-file-p node)
+  (let ((curr-dir (if (or (typep node 'file-node) (typep node 'static-file-node))
 		      (ensure-trailing-slash dst-dir)
 		      (ensure-trailing-slash (merge-pathnames (node-path-name node) dst-dir)))))
 
@@ -112,9 +119,9 @@
     (dolist (child (node-children node))
       (tree-to-files child curr-dir))
 
-    ;; if node is file, pass its variables into the appropriate template and write the result to a file
-    (if (node-is-file-p node)
-	(let* ((filename (file-namestring (node-path node)))
+    ;; if file-node, pass its variables into the appropriate template and write the result to a file
+    (when (typep node 'file-node)
+      (let* ((filename (file-namestring (node-path node)))
 	       (new-filename (concatenate 'string (subseq filename 0 (- (length filename) 3)) ".html"))
 	       (template-name (cdr (assoc "template" (node-variables node) :test #'equal))))
 	  (when (null template-name)
@@ -123,11 +130,16 @@
 	  		 :direction :output
 	  		 :if-exists :supersede
 	  		 :if-does-not-exist :create)
-	    (format stream "~A" (apply-template template-name (node-variables node))))))))
+	    (format stream "~A" (apply-template template-name (node-variables node))))))
+
+    ;; if static-file, copy it to the new location
+    (when (typep node 'static-file-node)
+      (let ((filename (file-namestring (node-path node))))
+	  (uiop:copy-file (node-path node) (merge-pathnames filename curr-dir))))))
 
 (defun parse-metadata-line (line)
   "Turn a colon seperated string into a key value pair"
-  (let ((data (split ":" line)))
+  (let ((data (str:split ":" line)))
     (values (car data) (string-trim '(#\Space #\Tab #\Newline) (cadr data)))))
 
 (defun ensure-trailing-slash (dir)
@@ -139,7 +151,7 @@
 
 (defun make-site-tree (path-name &key (include-drafts nil))
   "Find all the markdown files in a given directory, recursively"
-  (let ((node (make-instance 'page-node :path path-name :is-file nil))
+  (let ((node (make-instance 'dir-node :path path-name))
 	(files (uiop:directory-files path-name))
 	(dirs (uiop:subdirectories path-name)))
     (dolist (dir dirs)
@@ -148,10 +160,12 @@
 		    (and (string= "drafts" dirname) (not include-drafts)))
 	  (setf (node-children node) (append (node-children node) (list (make-site-tree dir)))))))
     (dolist (file files)
-      (if (and (not (member (file-namestring file) *excluded-files* :test #'equal))
-	       (string= (pathname-type file) "md"))
-	  (setf (node-children node)
-		(append (node-children node) (list (make-instance 'page-node :path file :is-file t))))))
+      (when (not (member (file-namestring file) *excluded-files* :test #'equal))
+	(if (string= (pathname-type file) "md")
+	    (setf (node-children node)
+		  (append (node-children node) (list (make-instance 'file-node :path file))))
+	    (setf (node-children node)
+		  (append (node-children node) (list (make-instance 'static-file-node :path file)))))))
     node))
 
 (defun make-site (input-dir output-dir)
