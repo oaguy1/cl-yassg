@@ -13,6 +13,10 @@
   "Exclude files of a given name"
   (push filename *excluded-files*))
 
+(defun exclude-dir (dir)
+  "Exclude directories of a given name"
+  (push dir *excluded-dirs*))
+
 (defclass page-node ()
   ((path
     :initarg :path
