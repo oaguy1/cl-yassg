@@ -2,7 +2,7 @@
 ** DONE Handle handing nested variables to parent sibling nodes (e.g. posts to index node)
 ** TODO Handle drafts
 ** DONE Handle assets
-** TODO Handle auto-creating indexes (e.g. post lists)
-** TODO Documentation
+** DONE Handle auto-creating indexes (e.g. post lists)
+** DONE Documentation
 ** TODO Testing
 ** TODO Handle RSS feed

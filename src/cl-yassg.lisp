@@ -109,6 +109,13 @@
     ;; set this nodes variables
     (setf (node-variables node) (remove nil node-vars))))
 
+(defmacro write-string-to-file (str filename)
+  "write the given string to the given filename, will overwrite existing files"
+  `(with-open-file (stream ,filename
+			   :direction :output
+			   :if-exists :supersede
+			   :if-does-not-exist :create)
+     (format stream "~A" ,str)))
 
 (defmethod tree-to-files ((node page-node) dst-dir)
   "convert node and its children into files using the registered templates"
@@ -119,6 +126,10 @@
     ;; ensure current directory exists
     (ensure-directories-exist curr-dir)
 
+    ;; write blank file at index.html, required to prevent the webserver from showing a directory listing
+    ;; will get overwritten if an actual index.md file exists
+    (write-string-to-file "" (merge-pathnames "index.html" curr-dir))
+
     ;; convert all children
     (dolist (child (node-children node))
       (tree-to-files child curr-dir))
@@ -126,15 +137,13 @@
     ;; if file-node, pass its variables into the appropriate template and write the result to a file
     (when (typep node 'file-node)
       (let* ((filename (file-namestring (node-path node)))
-	       (new-filename (concatenate 'string (subseq filename 0 (- (length filename) 3)) ".html"))
-	       (template-name (cdr (assoc "template" (node-variables node) :test #'equal))))
-	  (when (null template-name)
-	    (error "Unkown template. Dumping vars ~A" (node-variables node)))
-	  (with-open-file (stream (merge-pathnames new-filename curr-dir)
-	  		 :direction :output
-	  		 :if-exists :supersede
-	  		 :if-does-not-exist :create)
-	    (format stream "~A" (apply-template template-name (node-variables node))))))
+	     (new-filename (concatenate 'string (subseq filename 0 (- (length filename) 3)) ".html"))
+	     (template-name (cdr (assoc "template" (node-variables node) :test #'equal))))
+	(when (null template-name)
+	  (error "Unkown template. Dumping vars ~A" (node-variables node)))
+	(write-string-to-file
+	 (apply-template template-name (node-variables node))
+	 (merge-pathnames new-filename curr-dir))))
 
     ;; if static-file, copy it to the new location
     (when (typep node 'static-file-node)
