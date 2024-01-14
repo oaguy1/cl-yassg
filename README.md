@@ -102,7 +102,7 @@ This can be invoked in SBCL using the following command, which could be make int
 sbcl --load build.lisp --quit
 ```
 
-## Sample site
+## Sample site tree
 
 Below is a sample site tree, minus scripts for generating the site
 
@@ -120,3 +120,15 @@ blog
 ```
 
 In this site, there is an `assets` directory whose content gets copied to the new site. There is a `posts` directory containing markdown that holds the blog posts. There is a `template` directory which contains all the Lisp code for generating templates specific to your site. Finally, all markdown files in the root directory also make into pages on the site.
+
+## Roadmap
+
+This project is in a state where I am able to generate my own personal blog, which is roughly what I wanted to achieve. That said, the source code is small and there is room for expansion. Here are some of the things I plan on adding.
+
+* Handling drafts
+* Proper testing
+* Adding a RSS feed generator
+
+## Contributing
+
+The list above is not exhaustive and there is much more that can be done with this project. If you want to add or improve upon what I have built, please do so! Feel free to file an issue on GitHub or, better yet, fork the code and make a pull request. I will do my best to review pull requests in good time, but please understand this is a side project and not my full time employment.
