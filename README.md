@@ -4,11 +4,11 @@ Yet Another Static Site Generator, this time in Common Lisp
 
 [![Build Status](https://app.travis-ci.com/oaguy1/cl-yassg.svg?branch=main)](https://app.travis-ci.com/oaguy1/cl-yassg)
 
-This is less of an actual static site generator as it is a tool for parsing markdown files with simple front matter into a tree of variables that can then send off into the templating engine of your choice. While this approach is slightly less "batteries included" it is intended to give the user ultimate freedom to use whatever templates/outputs they like. To see a "canonical" implementation of what using this engine looks like, checkout [this repo](https://github.com/oaguy1/blog).
+This is less of an actual static site generator as it is a tool for parsing markdown files with simple front matter into a tree of variables that can then be sent off into the templating engine of your choice. While this approach is slightly less "batteries included" it is intended to give the user ultimate freedom to use whatever templates/outputs they like. To see a "canonical" implementation of what using this engine looks like, checkout [this repo](https://github.com/oaguy1/blog).
 
 ## Usage
 
-This generator takes arbitrarily nested folders and turns them into variables for the Common Lisp templating software of your choice. Templates are represented are functions that get passed into the engine using the `register-template` function. All top level variables are passed in as string values in named key arguments. Template functions may receive more key arguments than are expected, therefore it is required to include the `&allow-other-keys` flag set in the key arguments to your function. Usage demonstrated below:
+This generator takes arbitrarily nested folder structure and turns it into variables for the Common Lisp templating software of your choice. Templates are represented as functions that get passed into the engine using the `register-template` function. All top level variables are passed in as string values in named key arguments. Template functions may receive more key arguments than are expected, therefore it is required to include the `&allow-other-keys` flag in the key arguments to your function. Usage demonstrated below:
 
 ```Lisp
 ;;; using Spinneret HTML DSL
@@ -18,16 +18,16 @@ This generator takes arbitrarily nested folders and turns them into variables fo
 
 (in-package #:templates)
 
-(defmacro with-page-string ((&key title type twitter description) &body body)
+(defmacro with-page-string ((&key title) &body body)
    `(with-html-string
       (:doctype)
       (:html
         (:head
-         (:title (format nil "Lily Hughes-Robinson - ~A" ,title)))
+         (:title (format nil "My Awesome Site - ~A" ,title)))
         (:body ,@body))))
 
-(defun post (&key title description type twitter body-html date &allow-other-keys)
-  (with-page-string (:title title :type type :twitter twitter :description description)
+(defun post (&key title description date body-html &allow-other-keys)
+  (with-page-string (:title title)
     (:header
      (:hgroup
       (:h2 title)
@@ -39,12 +39,12 @@ This generator takes arbitrarily nested folders and turns them into variables fo
 (register-template "post" #'post)
 ```
 
-Variables for nested pages (e.g. accessing  variables for all blog posts from the home page) are also sent in as keys names after the directory containing the nested pages. Unlike normal variables, nested variables are passed in as assoc lists. Here is an example template handling assoc lists:
+One can access variables from nested pages! This makes it possible to list blog pages on the home page, link to child pages easily, show a whole tree structure on your site, etc. Variables for nested pages are sent in as keys names after the directory containing the nested pages. Unlike normal variables, which are always strings, nested variables are passed in as assoc lists. Here is an example template handling assoc lists:
 
 ```Lisp
-(defun home-page (&key title description type twitter posts body-html &allow-other-keys)
+(defun home-page (&key title posts body-html &allow-other-keys)
   (let ((sorted-posts (sort posts #'local-time:timestamp> :key #'(lambda (x) (local-time:parse-timestring (cdr (assoc "date" (cdr x) :test #'equal)))))))
-    (with-page-string (:title title :type type :twitter twitter :description description)
+    (with-page-string (:title title)
       (:h1 title)
       (:raw body-html)
       (:section
@@ -63,7 +63,7 @@ Variables for nested pages (e.g. accessing  variables for all blog posts from th
 
 Next, one wants to consider files to be ignored. By default, no files are excluded and the `templates` and `.git` directories are excluded. One can exclude more files by invoking `exclude-file` or `exclude-dir` in their build scripts.
 
-Finally, one can invoke the build pipeline using the `make-site` function. `make-site` takes in input directory and output directory. The input directory needs to contain assets and markdown files. The output directory doesn't need to exist, but **will be overwritten if it does exist**. Currently, files you remove from the input directory are not automatically removed from the output directory, they must be manually removed.
+Finally, one can invoke the build pipeline using the `make-site` function. `make-site` takes in input directory and output directory. The input directory needs to contain assets and markdown files. The output directory doesn't need to exist, but it**will be overwritten if it does exist**. Currently, files you remove from the input directory are not automatically removed from the output directory, they must be manually removed.
 
 Bringing this all together, here is a sample build script that builds a basic blog on macOS using QuickLisp with both input and target directories in source control and ignoring build scripts.
 
