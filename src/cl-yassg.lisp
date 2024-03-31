@@ -127,8 +127,9 @@
     (ensure-directories-exist curr-dir)
 
     ;; write blank file at index.html, required to prevent the webserver from showing a directory listing
-    ;; will get overwritten if an actual index.md file exists
-    (write-string-to-file "" (merge-pathnames "index.html" curr-dir))
+    ;; only do this when there is no file with the pattern index.*
+    (unless (not (index-in-children-p (node-children node)))
+      (write-string-to-file "" (merge-pathnames "index.html" curr-dir)))
 
     ;; convert all children
     (dolist (child (node-children node))
@@ -149,6 +150,10 @@
     (when (typep node 'static-file-node)
       (let ((filename (file-namestring (node-path node))))
 	  (uiop:copy-file (node-path node) (merge-pathnames filename curr-dir))))))
+
+(defun index-in-children-p (children)
+  "Test if an index file included in children"
+  (member "index" (mapcar (lambda (x) (pathname-name (node-path x))) children) :test #'equal))
 
 (defun parse-metadata-line (line)
   "Turn a colon seperated string into a key value pair"
